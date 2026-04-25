@@ -1,13 +1,16 @@
 {
   "name": "wms-desktop",
   "private": true,
+  "workspaces": ["mobile-scanner", "backend"],
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "tauri": "tauri",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mobile": "cd mobile-scanner && npm start",
+    "dev:all": "concurrently \"npm run dev\" \"npm run mobile\""
   },
   "dependencies": {
     "@tanstack/query-core": "^5.100.1",
@@ -26,6 +29,7 @@
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.17",
     "typescript": "~6.0.2",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "concurrently": "^8.2.2"
   }
 }

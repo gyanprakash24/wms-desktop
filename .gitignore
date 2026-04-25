@@ -1,0 +1,59 @@
+# Node / npm
+node_modules/
+npm-debug.log
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Expo / React Native
+.expo/
+.expo-shared/
+.expo/web/
+.expo/dev-tools/
+.expo/metro-cache
+.expo/.expo*
+.expo/metro-bundler-cache
+.expo/web-build
+.expo/android
+.expo/ios
+.expo/ios/*.xcarchive
+.expo/android/*.apk
+
+# Metro bundler cache
+metro-cache/
+metro-bundler-cache/
+
+# Web build artifacts (Expo web)
+web-build/
+# Distribution folder (compiled assets)
+
+dist/
+
+# Tauri (Rust) build artifacts
+src-tauri/target/
+src-tauri/target/debug/
+src-tauri/target/release/
+src-tauri/.tauri-build
+Cargo.lock
+
+# IDE / editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# OS generated files
+Desktop.ini
+
+# Environment files
+.env
+.env.local
+.env.*
+
+# Miscellaneous
+*.log
