@@ -3,6 +3,7 @@ export type ClaimStatus = 'Draft' | 'Submitted' | 'Accepted' | 'Rejected' | 'Nee
 export type Claim = {
   id: string;
   vin: string;
+  partSerial: string;
   status: ClaimStatus;
   createdAt: string;
   updatedAt: string;
