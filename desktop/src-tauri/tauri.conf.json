@@ -1,0 +1,38 @@
+
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "../src",
+    "distDir": "../src",
+    "withGlobalTauri": true
+  },
+  "package": {
+    "productName": "vehicle-warranty-manager",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "http": {
+        "request": true,
+        "scope": ["http://127.0.0.1:8000/*"]
+      }
+    },
+    "windows": [
+      {
+        "title": "Vehicle Warranty Manager",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.vehicle-corp.warranty-manager",
+      "icon": []
+    }
+  }
+}

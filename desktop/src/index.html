@@ -1,0 +1,50 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vehicle Management</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 80%; max-width: 800px; margin-top: 20px; }
+        .section { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; }
+        .section h2 { margin-top: 0; }
+        input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+        button { padding: 10px 15px; }
+        #components-table { margin-top: 15px; width: 100%; border-collapse: collapse; }
+        #components-table th, #components-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        #components-table th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Vehicle Management</h1>
+
+    <div class="container">
+        <!-- Sales Section -->
+        <div class="section">
+            <h2>Sales Center</h2>
+            <input type="text" id="sales-vin" placeholder="Enter VIN to Sell">
+            <button id="sell-button">Mark as Sold</button>
+        </div>
+
+        <!-- Service & Warranty Section -->
+        <div class="section">
+            <h2>Service Center</h2>
+            <input type="text" id="service-vin" placeholder="Enter VIN to View Components">
+            <button id="view-components-button">View Components</button>
+
+            <div id="components-view" style="display: none;">
+                <h3 id="components-title"></h3>
+                <table id="components-table"></table>
+
+                <h4>File a Warranty Claim</h4>
+                <input type="text" id="claim-serial" placeholder="Part Serial Number">
+                <input type="date" id="claim-date">
+                <textarea id="claim-description" placeholder="Failure description..."></textarea>
+                <button id="claim-button">Submit Claim</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

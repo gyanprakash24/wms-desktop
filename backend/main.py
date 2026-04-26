@@ -1,6 +1,9 @@
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import asyncpg
+from datetime import datetime, timedelta
+import os # Import the os module
 
 app = FastAPI()
 
@@ -10,7 +13,11 @@ DB_POOL = None
 @app.on_event("startup")
 async def startup():
     global DB_POOL
-    DB_POOL = await asyncpg.create_pool('postgresql://neondb_owner:npg_uK4rBTYslMS6@ep-purple-mountain-a4sdnbx2.us-east-1.aws.neon.tech/neondb?sslmode=require')
+    # Read the database URL from an environment variable
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url is None:
+        raise Exception("DATABASE_URL environment variable not set")
+    DB_POOL = await asyncpg.create_pool(database_url)
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -22,31 +29,108 @@ class ScanRequest(BaseModel):
     part_code: str
     stage: str
 
+class ClaimRequest(BaseModel):
+    vin: str
+    part_serial_number: str
+    failure_date: str
+    description: str
+
+@app.get("/")
+async def root():
+    return {"status": "Vehicle Warranty API is running"}
+
 @app.post("/production/scan")
-async def production_scan(request: ScanRequest):
-    async with DB_POOL.acquire() as connection:
-        async with connection.transaction():
-            # Validate VIN
-            vehicle = await connection.fetchrow("SELECT * FROM vehicles WHERE vin = $1", request.vin)
-            if not vehicle:
-                raise HTTPException(status_code=404, detail="VIN not found")
+async def scan_part(req: ScanRequest):
+    async with DB_POOL.acquire() as conn:
+        # Check if vehicle exists, if not, create it
+        vehicle_id = await conn.fetchval('SELECT id FROM vehicles WHERE vin = $1', req.vin)
+        if not vehicle_id:
+            vehicle_id = await conn.fetchval('INSERT INTO vehicles (vin) VALUES ($1) RETURNING id', req.vin)
 
-            # Check for existing serial number
-            existing_component = await connection.fetchrow("SELECT * FROM vehicle_components WHERE serial_number = $1", request.part_serial)
-            if existing_component:
-                if existing_component['vin'] != request.vin:
-                    raise HTTPException(status_code=409, detail="Part already assigned to another VIN.")
+        # Get part_id from catalog
+        part_id = await conn.fetchval('SELECT id FROM parts_catalog WHERE part_code = $1', req.part_code)
+        if not part_id:
+            raise HTTPException(status_code=404, detail=f"Part code {req.part_code} not found in catalog.")
+
+        # Log the scan
+        await conn.execute(
+            'INSERT INTO assembly_log (vehicle_id, part_id, serial_number, stage) VALUES ($1, $2, $3, $4)',
+            vehicle_id, part_id, req.part_serial, req.stage
+        )
+    return {"message": f"Part {req.part_serial} scanned for VIN {req.vin} at stage {req.stage}."}
+
+@app.post("/vehicles/{vin}/sell")
+async def sell_vehicle(vin: str):
+    async with DB_POOL.acquire() as conn:
+        rows_updated = await conn.execute('UPDATE vehicles SET sold_date = $1 WHERE vin = $2', datetime.utcnow(), vin)
+        if rows_updated == 'UPDATE 0':
+            raise HTTPException(status_code=404, detail="Vehicle not found.")
+    return {"message": f"Vehicle {vin} marked as sold. Warranty is now active."}
+
+@app.get("/vehicles/{vin}/components")
+async def get_components(vin: str):
+    async with DB_POOL.acquire() as conn:
+        vehicle = await conn.fetchrow('SELECT id, sold_date FROM vehicles WHERE vin = $1', vin)
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Vehicle not found.")
+
+        query = """
+            SELECT pc.part_name, al.serial_number, pc.warranty_months
+            FROM assembly_log al
+            JOIN parts_catalog pc ON al.part_id = pc.id
+            WHERE al.vehicle_id = $1;
+        """
+        components = await conn.fetch(query, vehicle['id'])
+
+        result = []
+        for c in components:
+            status = "Warranty Inactive (Vehicle Not Sold)"
+            expires = None
+            if vehicle['sold_date']:
+                warranty_end_date = vehicle['sold_date'] + timedelta(days=c['warranty_months'] * 30)
+                if datetime.utcnow().date() > warranty_end_date.date():
+                    status = "Expired"
                 else:
-                    # Part already scanned for this VIN, so it's a duplicate
-                    raise HTTPException(status_code=409, detail="Duplicate part scan for this VIN.")
+                    status = "Active"
+                expires = warranty_end_date.strftime('%Y-%m-%d')
 
-            # UPSERT logic is implicitly handled by the check above. Now, insert.
-            await connection.execute(
-                "INSERT INTO vehicle_components (vin, part_code, serial_number, stage_name, scanned_at) VALUES ($1, $2, $3, $4, NOW())",
-                request.vin, request.part_code, request.part_serial, request.stage
-            )
+            result.append({
+                "part_name": c['part_name'],
+                "serial_number": c['serial_number'],
+                "warranty_status": status,
+                "warranty_expires": expires
+            })
+    return result
 
-            # Update vehicle status
-            await connection.execute("UPDATE vehicles SET status = 'Production' WHERE vin = $1", request.vin)
+@app.post("/claims")
+async def file_claim(req: ClaimRequest):
+    async with DB_POOL.acquire() as conn:
+        # Fetch all data in one go
+        query = """
+            SELECT v.sold_date, pc.warranty_months
+            FROM vehicles v
+            JOIN assembly_log al ON v.id = al.vehicle_id
+            JOIN parts_catalog pc ON al.part_id = pc.id
+            WHERE v.vin = $1 AND al.serial_number = $2;
+        """
+        part_info = await conn.fetchrow(query, req.vin, req.part_serial_number)
 
-    return {"message": "Scan successful"}
+        if not part_info:
+            raise HTTPException(status_code=404, detail="Vehicle or part serial not found.")
+        if not part_info['sold_date']:
+            raise HTTPException(status_code=400, detail="Cannot file claim for unsold vehicle.")
+
+        # Check warranty validity
+        failure_date = datetime.fromisoformat(req.failure_date).date()
+        warranty_end_date = (part_info['sold_date'] + timedelta(days=part_info['warranty_months'] * 30)).date()
+
+        if failure_date > warranty_end_date:
+            raise HTTPException(status_code=400, detail="Warranty for this part has expired.")
+
+        # Log the claim
+        await conn.execute(
+            'INSERT INTO warranty_claims (vin, part_serial_number, failure_date, description) VALUES ($1, $2, $3, $4)',
+            req.vin, req.part_serial_number, req.failure_date, req.description
+        )
+
+    return {"message": "Claim filed successfully."}

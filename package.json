@@ -15,7 +15,9 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "preact": "^10.29.1",
-    "uuid": "^14.0.0"
+    "react-native-vision-camera": "^5.0.6",
+    "uuid": "^14.0.0",
+    "vision-camera-code-scanner": "^0.2.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.5",
