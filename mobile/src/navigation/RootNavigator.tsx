@@ -1,22 +1,31 @@
+import React, {useEffect} from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import ScanScreen from '../screens/ScanScreen';
+import DataListScreen from '../screens/DataListScreen';
+import { initDB } from '../database/database';
+import { Text } from 'react-native';
 
-import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
+const Tab = createBottomTabNavigator();
 
-import VehicleListScreen from '../screens/VehicleListScreen';
-import ScannerScreen from '../screens/ScannerScreen';
+function SyncScreen() {
+    return <Text>Sync Screen</Text>
+}
 
-const Stack = createNativeStackNavigator();
 
-function RootNavigator() {
+export default function RootNavigator() {
+
+    useEffect(() => {
+        initDB();
+    }, [])
+
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="VehicleList">
-        <Stack.Screen name="VehicleList" component={VehicleListScreen} />
-        <Stack.Screen name="Scanner" component={ScannerScreen} />
-      </Stack.Navigator>
+      <Tab.Navigator>
+        <Tab.Screen name="Scan" component={ScanScreen} />
+        <Tab.Screen name="Data" component={DataListScreen} />
+        <Tab.Screen name="Sync" component={SyncScreen} />
+      </Tab.Navigator>
     </NavigationContainer>
   );
 }
-
-export default RootNavigator;

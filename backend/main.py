@@ -3,25 +3,21 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import asyncpg
 from datetime import datetime, timedelta
-import os # Import the os module
+import os
+from typing import List, Dict
 
 app = FastAPI()
 
 # Database connection pool
 DB_POOL = None
 
-@app.on_event("startup")
-async def startup():
-    global DB_POOL
-    # Read the database URL from an environment variable
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url is None:
-        raise Exception("DATABASE_URL environment variable not set")
-    DB_POOL = await asyncpg.create_pool(database_url)
+# --- Models ---
+class Component(BaseModel):
+    name: str
+    serial_number: str
 
-@app.on_event("shutdown")
-async def shutdown():
-    await DB_POOL.close()
+class MobileSyncRequest(BaseModel):
+    data: Dict[str, List[Component]]
 
 class ScanRequest(BaseModel):
     vin: str
@@ -35,9 +31,52 @@ class ClaimRequest(BaseModel):
     failure_date: str
     description: str
 
+
+@app.on_event("startup")
+async def startup():
+    global DB_POOL
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url is None:
+        raise Exception("DATABASE_URL environment variable not set")
+    DB_POOL = await asyncpg.create_pool(database_url)
+
+@app.on_event("shutdown")
+async def shutdown():
+    await DB_POOL.close()
+
+
 @app.get("/")
 async def root():
     return {"status": "Vehicle Warranty API is running"}
+
+@app.post("/sync/mobile")
+async def sync_mobile_data(req: MobileSyncRequest):
+    async with DB_POOL.acquire() as conn:
+        async with conn.transaction():
+            for vin, components in req.data.items():
+                # Check if vehicle exists, if not, create it
+                vehicle_id = await conn.fetchval('SELECT id FROM vehicles WHERE vin = $1', vin)
+                if not vehicle_id:
+                    vehicle_id = await conn.fetchval('INSERT INTO vehicles (vin) VALUES ($1) RETURNING id', vin)
+
+                for component in components:
+                    # Get part_id from catalog
+                    part_id = await conn.fetchval('SELECT id FROM parts_catalog WHERE part_code = $1', component.name)
+                    if not part_id:
+                        # If the part code isn't in the main catalog, we can't log it.
+                        # We will skip this component but continue the sync for others.
+                        print(f"Warning: Part code {component.name} not found. Skipping.")
+                        continue
+
+                    # Log the scan, preventing duplicates
+                    await conn.execute('''
+                        INSERT INTO assembly_log (vehicle_id, part_id, serial_number, stage)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (vehicle_id, part_id, serial_number) DO NOTHING
+                    ''', vehicle_id, part_id, component.serial_number, "mobile_sync")
+
+    return {"message": "Mobile data sync successful."}
+
 
 @app.post("/production/scan")
 async def scan_part(req: ScanRequest):
